@@ -26,7 +26,7 @@ jobs:
     steps:
       # 仓库约 6 GiB / 7 万个文件, 只取单条历史 + 不物化工作区, 避免每日过期拉全量
       - name: Checkout fork
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
           filter: blob:none
