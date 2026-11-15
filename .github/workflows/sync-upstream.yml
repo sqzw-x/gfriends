@@ -1,0 +1,48 @@
+name: Sync upstream
+
+# Keeps sqzw-x/gfriends:master in sync with gfriends/gfriends:master (auto-updated daily).
+on:
+  schedule:
+    - cron: '17 12 * * *'
+  workflow_dispatch:
+    inputs:
+      test_mode:
+        description: '只校验输入与配置, 不做实际同步'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: sync-upstream
+  cancel-in-progress: false
+
+jobs:
+  sync:
+    name: Sync master from gfriends/gfriends
+    runs-on: ubuntu-latest
+    timeout-minutes: 90
+    steps:
+      # 仓库约 6 GiB / 7 万个文件, 只取单条历史 + 不物化工作区, 避免每日过期拉全量
+      - name: Checkout fork
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+          filter: blob:none
+          sparse-checkout: .github
+          persist-credentials: false
+
+      - name: Sync upstream
+        id: sync
+        uses: aormsby/Fork-Sync-With-Upstream-action@v3.4.3
+        with:
+          upstream_sync_repo: gfriends/gfriends
+          upstream_sync_branch: master
+          target_sync_branch: master
+          target_repo_token: ${{ secrets.GITHUB_TOKEN }}
+          shallow_since: '1 month ago'
+          test_mode: ${{ inputs.test_mode || false }}
+
+      - name: Report result
+        run: echo "has_new_commits=${{ steps.sync.outputs.has_new_commits }}"
