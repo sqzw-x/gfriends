@@ -1,6 +1,6 @@
 name: Sync upstream
 
-# Keeps sqzw-x/gfriends:master in sync with gfriends/gfriends:master (auto-updated daily).
+# 让 sqzw-x/gfriends:master 跟上 gfriends/gfriends:master(上游每天自动更新)
 on:
   schedule:
     - cron: '17 12 * * *'
@@ -24,7 +24,7 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 90
     steps:
-      # 仓库约 6 GiB / 7 万个文件, 只取单条历史 + 不物化工作区, 避免每日过期拉全量
+      # 仓库 6 GiB / 7 万文件: 只取单条历史、且不物化工作区, 否则每跑一次都要拉全部文件
       - name: Checkout fork
         uses: actions/checkout@v5
         with:
@@ -44,5 +44,18 @@ jobs:
           shallow_since: '1 month ago'
           test_mode: ${{ inputs.test_mode || false }}
 
-      - name: Report result
-        run: echo "has_new_commits=${{ steps.sync.outputs.has_new_commits }}"
+      # 上游取不到时该 action 也只输出 "No new commits" 并以 0 退出, 这里单独核对
+      - name: Verify fork caught up
+        if: ${{ !inputs.test_mode }}
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          RUN_STARTED_AT: ${{ github.run_started_at }}
+        run: |
+          set -euo pipefail
+          behind=$(gh api "repos/gfriends/gfriends/compare/master...sqzw-x:master" --jq '.behind_by')
+          upstream_date=$(gh api "repos/gfriends/gfriends/commits/master" --jq '.commit.committer.date')
+          echo "has_new_commits=${{ steps.sync.outputs.has_new_commits }} behind_by=$behind upstream_head=$upstream_date run_started_at=$RUN_STARTED_AT"
+          if [ "$behind" -gt 0 ] && [[ "$upstream_date" < "$RUN_STARTED_AT" ]]; then
+            echo "::error::fork 仍落后上游 $behind 个提交, 本次没有同步成功"
+            exit 1
+          fi
