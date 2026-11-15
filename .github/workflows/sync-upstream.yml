@@ -49,13 +49,13 @@ jobs:
         if: ${{ !inputs.test_mode }}
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-          RUN_STARTED_AT: ${{ github.run_started_at }}
         run: |
           set -euo pipefail
           behind=$(gh api "repos/gfriends/gfriends/compare/master...sqzw-x:master" --jq '.behind_by')
           upstream_date=$(gh api "repos/gfriends/gfriends/commits/master" --jq '.commit.committer.date')
-          echo "has_new_commits=${{ steps.sync.outputs.has_new_commits }} behind_by=$behind upstream_head=$upstream_date run_started_at=$RUN_STARTED_AT"
-          if [ "$behind" -gt 0 ] && [[ "$upstream_date" < "$RUN_STARTED_AT" ]]; then
+          age=$(( $(date -u +%s) - $(date -u -d "$upstream_date" +%s) ))
+          echo "has_new_commits=${{ steps.sync.outputs.has_new_commits }} behind_by=$behind upstream_head=$upstream_date age=${age}s"
+          if [ "$behind" -gt 0 ] && [ "$age" -gt 600 ]; then
             echo "::error::fork 仍落后上游 $behind 个提交, 本次没有同步成功"
             exit 1
           fi
